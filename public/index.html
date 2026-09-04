@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>AI Job Matcher</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding-top: 60px;
+    }
+
+    .card {
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      max-width: 700px;
+    }
+
+    h1 {
+      color: #2d3561;
+      margin-bottom: 5px;
+    }
+
+    p {
+      color: #555;
+      margin-top: 0;
+    }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 12px;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #4a5ed4;
+      box-shadow: 0 0 0 3px rgba(74, 94, 212, 0.15);
+    }
+
+    #pdfInput {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    button {
+      background: #4a5ed4;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #3a4bb8;
+    }
+
+    button:disabled {
+      background: #aab0d8;
+      cursor: not-allowed;
+    }
+
+    #loading {
+      display: none;
+      margin-top: 15px;
+      color: #4a5ed4;
+      font-weight: 500;
+    }
+
+    .job {
+      background: white;
+      border: 1px solid #e0e0e8;
+      padding: 18px 20px;
+      margin-top: 15px;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .job h3 {
+      margin: 0 0 8px 0;
+      color: #2d3561;
+      font-size: 17px;
+    }
+
+    .job p {
+      color: #333;
+      line-height: 1.5;
+      margin: 8px 0;
+    }
+
+    .job a {
+      display: inline-block;
+      margin-top: 8px;
+      color: #4a5ed4;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .job a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+
+    <h1>AI Job Matcher</h1>
+
+    <p>Choose how you want to provide your resume and find matching jobs.</p>
+
+    <div style="margin-bottom: 15px;">
+      <label style="font-weight: 600; margin-right: 15px;">
+        <input type="radio" name="inputMode" value="text" checked>
+        Paste text
+      </label>
+
+      <label style="font-weight: 600;">
+        <input type="radio" name="inputMode" value="pdf">
+        Upload PDF
+      </label>
+    </div>
+
+    <textarea
+      id="resumeInput"
+      placeholder="Paste your resume text here..."
+    ></textarea>
+
+    <input
+      type="file"
+      id="pdfInput"
+      accept=".pdf"
+      style="display: none;"
+    >
+
+    <br>
+
+    <button id="matchBtn">Find Matching Jobs</button>
+
+    <div id="loading">
+      Searching and scoring jobs, please wait...
+    </div>
+
+    <div id="results"></div>
+
+  </div>
+
+  <script>
+    const btn = document.getElementById('matchBtn');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    const textArea = document.getElementById('resumeInput');
+    const pdfInput = document.getElementById('pdfInput');
+    const radios = document.querySelectorAll('input[name="inputMode"]');
+
+    radios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        if (radio.value === 'pdf' && radio.checked) {
+          textArea.style.display = 'none';
+          pdfInput.style.display = 'block';
+        } else if (radio.value === 'text' && radio.checked) {
+          textArea.style.display = 'block';
+          pdfInput.style.display = 'none';
+        }
+      });
+    });
+
+    function displayResults(data) {
+      loading.style.display = 'none';
+      btn.disabled = false;
+
+      if (!data.matches || data.matches.length === 0) {
+        results.innerHTML = '<p>No matching jobs found right now.</p>';
+        return;
+      }
+
+      data.matches.forEach(match => {
+        const div = document.createElement('div');
+        div.className = 'job';
+
+        div.innerHTML = `
+          <h3>${match.position} — ${match.company}</h3>
+          <p>${match.aiResponse.replace(/\n/g, '<br>')}</p>
+          <a href="${match.url}" target="_blank">View job</a>
+        `;
+
+        results.appendChild(div);
+      });
+    }
+
+    btn.addEventListener('click', async () => {
+      const mode = document.querySelector(
+        'input[name="inputMode"]:checked'
+      ).value;
+
+      results.innerHTML = '';
+
+      if (mode === 'text') {
+        const resumeText = textArea.value;
+
+        if (!resumeText.trim()) {
+          alert('Please paste your resume text first.');
+          return;
+        }
+
+        loading.style.display = 'block';
+        btn.disabled = true;
+
+        try {
+          const response = await fetch('/match-all', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              resumeText
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error || 'Failed to match jobs'
+            );
+          }
+
+          displayResults(data);
+
+        } catch (error) {
+          console.error(error);
+          loading.style.display = 'none';
+          btn.disabled = false;
+          results.innerHTML =
+            '<p>Something went wrong. Please try again.</p>';
+        }
+
+      } else {
+        const file = pdfInput.files[0];
+
+        if (!file) {
+          alert('Please select a PDF file first.');
+          return;
+        }
+
+        loading.style.display = 'block';
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('resume', file);
+
+        try {
+          const response = await fetch('/match-pdf', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error || 'Failed to process PDF'
+            );
+          }
+
+          displayResults(data);
+
+        } catch (error) {
+          console.error(error);
+          loading.style.display = 'none';
+          btn.disabled = false;
+          results.innerHTML =
+            '<p>Something went wrong while processing the PDF. Please try again.</p>';
+        }
+      }
+    });
+  </script>
+
+</body>
+
+</html>
